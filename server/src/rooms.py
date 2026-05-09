@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import json
 from datetime import datetime, timezone
 from random import choice
 from string import digits
@@ -7,6 +9,11 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
+
+try:
+    from .rag import mediate_conversation
+except ImportError:
+    from rag import mediate_conversation
 
 router = APIRouter(prefix="/rooms", tags=["rooms"])
 
@@ -25,6 +32,15 @@ def _generate_code() -> str:
     prefix = "".join(choice(letters) for _ in range(3))
     suffix = "".join(choice(digits) for _ in range(4))
     return f"{prefix}-{suffix}"
+
+
+def _empty_insights() -> dict[str, Any]:
+    return {
+        "reply": "",
+        "agreements": [],
+        "disagreements": [],
+        "compromises": [],
+    }
 
 
 class CreateRoomRequest(BaseModel):
@@ -58,6 +74,8 @@ class RoomStore:
             "hostName": room["hostName"],
             "participants": room["participants"],
             "createdAt": room["createdAt"],
+            "publicMessages": room["publicMessages"],
+            "insights": room["insights"],
         }
 
     def create_room(self, name: str, requested_code: str | None = None) -> dict[str, Any]:
@@ -76,9 +94,45 @@ class RoomStore:
                 }
             ],
             "createdAt": _now_iso(),
+            "publicMessages": [],
+            "insights": _empty_insights(),
         }
 
         self.rooms[code] = room
+        return self._serialize(room)
+
+    def append_public_message(self, code: str, sender: str, text: str, role: str = "participant", is_ai: bool = False) -> dict[str, Any]:
+        code = code.upper().strip()
+        room = self.rooms.get(code)
+
+        if not room:
+            raise KeyError(f"Room {code} not found")
+
+        message = {
+            "sender": sender,
+            "role": role,
+            "time": _now_iso(),
+            "text": text,
+            "isAI": is_ai,
+        }
+
+        room["publicMessages"].append(message)
+        return self._serialize(room)
+
+    def update_insights(self, code: str, insights: dict[str, Any]) -> dict[str, Any]:
+        code = code.upper().strip()
+        room = self.rooms.get(code)
+
+        if not room:
+            raise KeyError(f"Room {code} not found")
+
+        room["insights"] = {
+            "reply": insights.get("reply", ""),
+            "agreements": insights.get("agreements", []),
+            "disagreements": insights.get("disagreements", []),
+            "compromises": insights.get("compromises", []),
+        }
+
         return self._serialize(room)
 
     def join_room(self, code: str, name: str) -> dict[str, Any]:
@@ -209,7 +263,54 @@ async def room_socket(websocket: WebSocket, code: str):
         })
 
         while True:
-            await websocket.receive_text()
+            raw_message = await websocket.receive_text()
+
+            try:
+                payload = json.loads(raw_message)
+            except json.JSONDecodeError:
+                await websocket.send_json({
+                    "type": "room_error",
+                    "message": "Invalid JSON payload.",
+                })
+                continue
+
+            action = payload.get("action")
+
+            if action == "send_public_message":
+                sender = (payload.get("sender") or "Guest").strip() or "Guest"
+                text = (payload.get("text") or "").strip()
+
+                if not text:
+                    continue
+
+                room = store.append_public_message(code, sender, text)
+                await manager.broadcast_room_state(code, room)
+
+                insights = await asyncio.to_thread(mediate_conversation, room["publicMessages"])
+                ai_reply = (insights.get("reply") or "").strip()
+
+                if ai_reply:
+                    room = store.append_public_message(
+                        code,
+                        "AI Mediator",
+                        ai_reply,
+                        role="ai",
+                        is_ai=True,
+                    )
+
+                room = store.update_insights(code, insights)
+                await manager.broadcast_room_state(code, room)
+
+            elif action == "get_room":
+                await websocket.send_json({
+                    "type": "room_state",
+                    "room": store.get_room(code),
+                })
+            else:
+                await websocket.send_json({
+                    "type": "room_error",
+                    "message": f"Unknown action: {action}",
+                })
 
     except WebSocketDisconnect:
         manager.disconnect(code, websocket)

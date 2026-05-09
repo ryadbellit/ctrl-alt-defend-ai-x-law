@@ -15,6 +15,27 @@ export interface RoomState {
   hostName: string;
   participants: RoomParticipant[];
   createdAt: string;
+  publicMessages: RoomChatMessage[];
+  insights: RoomInsights;
+}
+
+export interface RoomChatMessage {
+  sender: string;
+  role: string;
+  time: string;
+  text: string;
+  isAI?: boolean;
+}
+
+export interface InsightPoint {
+  text: string;
+}
+
+export interface RoomInsights {
+  reply: string;
+  agreements: InsightPoint[];
+  disagreements: InsightPoint[];
+  compromises: InsightPoint[];
 }
 
 export interface CreateRoomRequest {
@@ -25,6 +46,16 @@ export interface CreateRoomRequest {
 export interface JoinRoomRequest {
   code: string;
   name: string;
+}
+
+export interface ChatMessage {
+  role: 'user' | 'model';
+  content: string;
+}
+
+export interface ChatResponse {
+  reply: string;
+  sources: string[];
 }
 
 @Injectable({ providedIn: 'root' })
@@ -54,25 +85,46 @@ export class RoomsService {
     );
   }
 
+  sendPrivateMessage(message: string, history: ChatMessage[]): Promise<ChatResponse> {
+    return firstValueFrom(
+      this.http.post<ChatResponse>(`${this.apiUrl.replace('/rooms', '')}/chat`, {
+        message,
+        history,
+      })
+    );
+  }
+
+  sendPublicMessage(
+    socket: WebSocket,
+    sender: string,
+    text: string,
+  ): void {
+    socket.send(JSON.stringify({
+      action: 'send_public_message',
+      sender,
+      text,
+    }));
+  }
+
   connectToRoomUpdates(
     code: string,
     onRoomState: (room: RoomState) => void,
     onError?: (message: string) => void,
-    ): WebSocket {
+  ): WebSocket {
     const socket = new WebSocket(`ws://localhost:8000/rooms/${code}/ws`);
 
     socket.onmessage = (event) => {
-        const response = JSON.parse(event.data);
+      const response = JSON.parse(event.data);
 
-        if (response.type === 'room_state' && response.room) {
+      if (response.type === 'room_state' && response.room) {
         onRoomState(response.room as RoomState);
-        }
+      }
 
-        if (response.type === 'room_error') {
+      if (response.type === 'room_error') {
         onError?.(response.message ?? 'Room websocket error.');
-        }
+      }
     };
 
     return socket;
-    }
+  }
 }

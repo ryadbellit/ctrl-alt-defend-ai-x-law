@@ -70,28 +70,47 @@
     <header class="chat-header">
       <div class="chat-header__status" [class.active]="sessionActive">
         <span class="status-dot"></span>
-        <span>Session active</span>
+        <span>{{ chatTitle }}</span>
       </div>
+      <p class="chat-header__subtitle">{{ chatSubtitle }}</p>
     </header>
 
     <div class="messages" #messagesContainer>
-      <div
-        class="message"
-        *ngFor="let msg of messages"
-        [class.message--ai]="msg.isAI"
-      >
-        <div class="message__avatar" [style.background]="getAvatarColor(msg.sender)">
-          {{ getInitial(msg.sender) }}
-        </div>
-        <div class="message__body">
-          <div class="message__meta">
-            <span class="message__sender">{{ msg.sender }}</span>
-            <span class="message__time">{{ msg.time }}</span>
-            <span class="message__badge" *ngIf="msg.isAI">AI Mediator</span>
+      <ng-container *ngIf="visibleMessages.length > 0; else emptyChatState">
+        <div
+          class="message"
+          *ngFor="let msg of visibleMessages"
+          [class.message--ai]="msg.isAI"
+        >
+          <div class="message__avatar" [style.background]="getAvatarColor(msg.sender)">
+            {{ getInitial(msg.sender) }}
           </div>
-          <p class="message__text">{{ msg.text }}</p>
+          <div class="message__body">
+            <div class="message__meta">
+              <span class="message__sender">{{ msg.sender }}</span>
+              <span class="message__time">{{ msg.time }}</span>
+              <span class="message__badge" *ngIf="msg.isAI">AI Mediator</span>
+            </div>
+            <p class="message__text">{{ msg.text }}</p>
+          </div>
         </div>
-      </div>
+      </ng-container>
+
+      <ng-template #emptyChatState>
+        <div class="message message--ai">
+          <div class="message__avatar" [style.background]="getAvatarColor('ai')">
+            AI
+          </div>
+          <div class="message__body">
+            <div class="message__meta">
+              <span class="message__sender">AI Mediator</span>
+              <span class="message__time">Now</span>
+              <span class="message__badge">Ready</span>
+            </div>
+            <p class="message__text">{{ emptyStateText }}</p>
+          </div>
+        </div>
+      </ng-template>
     </div>
 
     <!-- Input -->
@@ -99,8 +118,8 @@
       <div class="chat-input">
         <textarea
           class="chat-input__field"
-          placeholder="Type your message..."
-          [value]="newMessage"
+          [(ngModel)]="newMessage"
+          [placeholder]="chatPlaceholder"
           (keydown)="onKeydown($event)"
           rows="1"
         ></textarea>
@@ -113,13 +132,13 @@
               <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.8"/><path d="M8 13s1.5 2 4 2 4-2 4-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><line x1="9" y1="9" x2="9.01" y2="9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="15" y1="9" x2="15.01" y2="9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             </button>
           </div>
-          <button class="send-btn" (click)="sendMessage()">
+          <button class="send-btn" (click)="sendMessage()" [disabled]="isSending">
             <svg viewBox="0 0 24 24" fill="none"><line x1="22" y1="2" x2="11" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><polygon points="22 2 15 22 11 13 2 9 22 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="currentColor"/></svg>
-            Send
+            {{ activeTab === 'private' ? 'Ask AI' : 'Send' }}
           </button>
         </div>
       </div>
-      <p class="chat-input__notice">All messages are recorded for documentation purposes</p>
+      <p class="chat-input__notice">{{ chatNotice }}</p>
     </div>
   </main>
 
@@ -132,7 +151,15 @@
       AI Mediation Insights
     </h2>
 
-    
+        <div class="insight-card" *ngIf="insights.reply">
+          <div class="insight-card__header">
+            <div class="insight-icon insight-icon--blue">
+              <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.8"/><path d="M9 12h6M9 16h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </div>
+            <span class="insight-card__title">Mediator Summary</span>
+          </div>
+          <p class="message__text">{{ insights.reply }}</p>
+        </div>
 
     <!-- Points of Agreement -->
     <div class="insight-card">
@@ -143,7 +170,7 @@
         <span class="insight-card__title">Points of Agreement</span>
       </div>
       <ul class="insight-list">
-        <li class="insight-list__item insight-list__item--agree" *ngFor="let a of agreements">
+        <li class="insight-list__item insight-list__item--agree" *ngFor="let a of insights.agreements">
           <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#22c55e" stroke-width="1.8"/><polyline points="9 12 11 14 15 10" stroke="#22c55e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
           {{ a.text }}
         </li>
@@ -159,7 +186,7 @@
         <span class="insight-card__title">Points of Disagreement</span>
       </div>
       <ul class="insight-list">
-        <li class="insight-list__item insight-list__item--disagree" *ngFor="let d of disagreements">
+        <li class="insight-list__item insight-list__item--disagree" *ngFor="let d of insights.disagreements">
           <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#f97316" stroke-width="1.8"/><line x1="12" y1="8" x2="12" y2="12" stroke="#f97316" stroke-width="1.8" stroke-linecap="round"/><line x1="12" y1="16" x2="12.01" y2="16" stroke="#f97316" stroke-width="2" stroke-linecap="round"/></svg>
           {{ d.text }}
         </li>
@@ -175,7 +202,7 @@
         <span class="insight-card__title">Suggested Compromises</span>
       </div>
       <ul class="insight-list">
-        <li class="insight-list__item insight-list__item--compromise" *ngFor="let c of compromises">
+        <li class="insight-list__item insight-list__item--compromise" *ngFor="let c of insights.compromises">
           <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#a855f7" stroke-width="1.8"/><line x1="12" y1="8" x2="12" y2="16" stroke="#a855f7" stroke-width="1.8" stroke-linecap="round"/><line x1="8" y1="12" x2="16" y2="12" stroke="#a855f7" stroke-width="1.8" stroke-linecap="round"/></svg>
           {{ c.text }}
         </li>

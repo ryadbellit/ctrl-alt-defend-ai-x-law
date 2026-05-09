@@ -1,11 +1,13 @@
+import json
 import os
 import re
 import time
 from pathlib import Path
+from typing import Any
 from dotenv import load_dotenv
 
 from google import genai
-from google.genai import types
+from google.genai import types  # type: ignore[import-not-found]
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -17,6 +19,7 @@ load_dotenv()
 
 _client = None
 MODEL = "gemini-3-flash-preview"
+_gemini_disabled_until = 0.0
 
 def get_client():
     """Lazy initialization of Gemini client to avoid crash if API key is missing."""
@@ -27,6 +30,66 @@ def get_client():
             raise ValueError("GEMINI_API_KEY is not set in environment variables. Please set it to use RAG features.")
         _client = genai.Client(api_key=api_key)
     return _client
+
+
+def _gemini_is_temporarily_disabled() -> bool:
+    return time.monotonic() < _gemini_disabled_until
+
+
+def _disable_gemini_for(seconds: float) -> None:
+    global _gemini_disabled_until
+    _gemini_disabled_until = max(_gemini_disabled_until, time.monotonic() + seconds)
+
+
+def _local_mediation_reply(user_message: str) -> str:
+    lowered = user_message.lower()
+
+    if any(keyword in lowered for keyword in ["accord", "d'accord", "agree", "oui"]):
+        return "Je note une ouverture vers un accord. Essayez de préciser un point concret que vous acceptez tous les deux."
+
+    if any(keyword in lowered for keyword in ["non", "refuse", "désaccord", "pas", "problème"]):
+        return "Le point de blocage semble être précis. Pouvez-vous le reformuler en un besoin ou une limite acceptable pour chacun ?"
+
+    return "Essayez de distinguer ce qui est non négociable de ce qui peut être ajusté. Un compromis clair peut souvent débloquer la discussion."
+
+
+def _local_public_mediation(public_messages: list[dict[str, Any]]) -> dict[str, Any]:
+    if not public_messages:
+        return {
+            "reply": "La médiation est prête. Commencez la discussion dans le chat public.",
+            "agreements": [],
+            "disagreements": [],
+            "compromises": [],
+        }
+
+    transcript = "\n".join(
+        f"{message.get('sender', 'Participant')}: {message.get('text', '')}"
+        for message in public_messages[-12:]
+    )
+    lowered = transcript.lower()
+
+    agreements = []
+    disagreements = []
+    compromises = []
+
+    if any(keyword in lowered for keyword in ["d'accord", "accord", "agree", "ok", "oui"]):
+        agreements.append({"text": "Les parties cherchent une base commune."})
+
+    if any(keyword in lowered for keyword in ["non", "refuse", "désaccord", "pas", "problème"]):
+        disagreements.append({"text": "Un point précis bloque encore la discussion."})
+
+    if len(agreements) == 0 and len(disagreements) == 0:
+        agreements.append({"text": "La discussion reste ouverte et orientée vers la recherche d'une solution."})
+
+    compromises.append({"text": "Clarifier le besoin de chaque partie et tester une option intermédiaire concrète."})
+    compromises.append({"text": "Définir un engagement minimal acceptable pour avancer."})
+
+    return {
+        "reply": "Je vous invite à clarifier ce que chacun veut obtenir et à chercher un terrain d'entente concret.",
+        "agreements": agreements,
+        "disagreements": disagreements,
+        "compromises": compromises,
+    }
 
 router = APIRouter()
 
@@ -125,7 +188,20 @@ def query_rag(user_message: str, history: list[types.Content] = []) -> dict:
     Supports multi-turn conversation via history.
     Returns { "reply": str, "sources": list[str] }
     """
-    store_name = get_store_name()
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        return {
+            "reply": _local_mediation_reply(user_message),
+            "sources": [],
+        }
+
+    if _gemini_is_temporarily_disabled():
+        return {
+            "reply": _local_mediation_reply(user_message),
+            "sources": [],
+        }
+
+    store_name = os.environ.get("FILE_SEARCH_STORE_NAME")
 
     system_prompt = """
 
@@ -213,20 +289,24 @@ def query_rag(user_message: str, history: list[types.Content] = []) -> dict:
     ]
 
     # Retry automatique si rate limit
+    response = None
     for attempt in range(3):
         try:
+            generate_config = {}
+
+            if store_name:
+                generate_config["tools"] = [
+                    types.Tool(
+                        file_search=types.FileSearch(
+                            file_search_store_names=[store_name]
+                        )
+                    )
+                ]
+
             response = get_client().models.generate_content(
                 model=MODEL,
                 contents=contents,
-                config=types.GenerateContentConfig(
-                    tools=[
-                        types.Tool(
-                            file_search=types.FileSearch(
-                                file_search_store_names=[store_name]
-                            )
-                        )
-                    ]
-                )
+                config=types.GenerateContentConfig(**generate_config),
             )
             break
         except Exception as e:
@@ -235,7 +315,13 @@ def query_rag(user_message: str, history: list[types.Content] = []) -> dict:
                 print(f"Rate limit. Waiting {wait}s...")
                 time.sleep(wait)
             else:
+                if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                    _disable_gemini_for(900)
+                    return {"reply": _local_mediation_reply(user_message), "sources": []}
                 raise
+
+    if response is None:
+        raise RuntimeError("Gemini response was not generated.")
 
     # Extract sources from the response text
     text = response.text
@@ -249,6 +335,72 @@ def query_rag(user_message: str, history: list[types.Content] = []) -> dict:
         text = text[:match.start()].strip()
 
     return {"reply": text, "sources": sources}
+
+
+def mediate_conversation(public_messages: list[dict[str, Any]]) -> dict[str, Any]:
+    """Generate a mediated summary for the public room chat using Gemini."""
+    if not public_messages:
+        return {
+            "reply": "La médiation est prête. Commencez la discussion dans le chat public.",
+            "agreements": [],
+            "disagreements": [],
+            "compromises": [],
+        }
+
+    recent_messages = public_messages[-12:]
+    transcript = "\n".join(
+        f"{message.get('sender', 'Participant')}: {message.get('text', '')}"
+        for message in recent_messages
+    )
+
+    prompt = f"""
+Tu es un médiateur neutre.
+Analyse la conversation ci-dessous et retourne UNIQUEMENT du JSON valide sans markdown.
+
+Format exact attendu:
+{{
+  "reply": "une réponse courte et utile à montrer dans le chat public",
+  "agreements": [{{"text": "point d'accord"}}],
+  "disagreements": [{{"text": "point de désaccord"}}],
+  "compromises": [{{"text": "compromis suggéré"}}]
+}}
+
+Conversation:
+{transcript}
+""".strip()
+
+    try:
+        if _gemini_is_temporarily_disabled() or not os.environ.get("GEMINI_API_KEY"):
+            return _local_public_mediation(public_messages)
+
+        response = get_client().models.generate_content(
+            model=MODEL,
+            contents=[types.Content(role="user", parts=[types.Part(text=prompt)])],
+        )
+
+        raw_text = (response.text or "").strip()
+        if raw_text.startswith("```"):
+            raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text)
+            raw_text = re.sub(r"\s*```$", "", raw_text)
+
+        json_start = raw_text.find("{")
+        json_end = raw_text.rfind("}")
+        if json_start != -1 and json_end != -1:
+            raw_text = raw_text[json_start:json_end + 1]
+
+        parsed = json.loads(raw_text)
+        return {
+            "reply": str(parsed.get("reply", "")),
+            "agreements": parsed.get("agreements", []),
+            "disagreements": parsed.get("disagreements", []),
+            "compromises": parsed.get("compromises", []),
+        }
+    except Exception as exc:
+        if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc):
+            _disable_gemini_for(900)
+            return _local_public_mediation(public_messages)
+        print(f"Mediation generation failed: {exc}")
+        return _local_public_mediation(public_messages)
 
 
 # -------------------------------------------------------
