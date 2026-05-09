@@ -1,0 +1,263 @@
+// ─── Design Tokens ───────────────────────────────────────────────────────────
+$color-bg:          #ffffff;
+$color-text:        #0a0a0a;
+$color-text-muted:  #6b7280;
+$color-primary:     #111827;
+$color-border:      #e5e7eb;
+$color-blue:        #3b82f6;
+$color-blue-light:  #eff6ff;
+$color-badge-bg:    #f0f4ff;
+$color-badge-text:  #3b63d6;
+$color-card-bg:     #f9fafb;
+$color-icon-bg:     #eff6ff;
+
+$font-display: 'Georgia', 'Times New Roman', serif;
+$font-body:    'system-ui', -apple-system, sans-serif;
+
+$radius-sm:   8px;
+$radius-md:   12px;
+$radius-lg:   16px;
+$radius-full: 999px;
+
+$shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+$shadow-btn:  0 1px 2px rgba(0, 0, 0, 0.08);
+
+// ─── Reset & Base ─────────────────────────────────────────────────────────────
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+// ─── Page Wrapper ─────────────────────────────────────────────────────────────
+.page-wrapper {
+  min-height: 100vh;
+  background-color: $color-bg;
+  font-family: $font-body;
+  color: $color-text;
+}
+
+// ─── Navbar ───────────────────────────────────────────────────────────────────
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 40px;
+  border-bottom: 1px solid $color-border;
+
+  &__brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: $color-text;
+    text-decoration: none;
+  }
+
+  &__icon {
+    width: 22px;
+    height: 22px;
+    color: $color-blue;
+  }
+
+  &__name {
+    letter-spacing: -0.01em;
+  }
+
+  &__links {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+  }
+
+  &__link {
+    font-size: 0.9rem;
+    color: $color-text-muted;
+    text-decoration: none;
+    transition: color 0.2s ease;
+
+    &:hover {
+      color: $color-text;
+    }
+  }
+}
+
+// ─── Hero ─────────────────────────────────────────────────────────────────────
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 80px 24px 64px;
+
+  &__badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: $color-badge-bg;
+    color: $color-badge-text;
+    font-size: 0.82rem;
+    font-weight: 500;
+    padding: 7px 14px;
+    border-radius: $radius-full;
+    margin-bottom: 28px;
+    letter-spacing: 0.01em;
+
+    svg {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+    }
+  }
+
+  &__title {
+    font-size: clamp(2.4rem, 5vw, 3.6rem);
+    font-weight: 800;
+    line-height: 1.12;
+    letter-spacing: -0.03em;
+    color: $color-text;
+    max-width: 720px;
+    margin-bottom: 22px;
+  }
+
+  &__subtitle {
+    font-size: 1.05rem;
+    line-height: 1.65;
+    color: $color-text-muted;
+    max-width: 620px;
+    margin-bottom: 40px;
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+
+// ─── Buttons ──────────────────────────────────────────────────────────────────
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 28px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-family: $font-body;
+  border-radius: $radius-md;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  text-decoration: none;
+  letter-spacing: -0.01em;
+
+  &--primary {
+    background: $color-primary;
+    color: #ffffff;
+    border-color: $color-primary;
+    box-shadow: $shadow-btn;
+
+    &:hover {
+      background: #1f2937;
+      border-color: #1f2937;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+    }
+
+    &:active {
+      transform: translateY(0);
+      box-shadow: $shadow-btn;
+    }
+  }
+
+  &--secondary {
+    background: #ffffff;
+    color: $color-text;
+    border-color: $color-border;
+    box-shadow: $shadow-btn;
+
+    &:hover {
+      background: $color-card-bg;
+      border-color: #d1d5db;
+      transform: translateY(-1px);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+  }
+
+  &__arrow {
+    font-size: 1.1rem;
+    line-height: 1;
+    transition: transform 0.18s ease;
+  }
+
+  &--primary:hover &__arrow {
+    transform: translateX(3px);
+  }
+}
+
+// ─── Feature Cards ────────────────────────────────────────────────────────────
+.features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  padding: 0 40px 64px;
+  max-width: 1100px;
+  margin: 0 auto;
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+    padding: 0 20px 40px;
+  }
+}
+
+.feature-card {
+  background: $color-card-bg;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+  padding: 28px 24px;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+
+  &:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
+  }
+
+  &__icon {
+    width: 44px;
+    height: 44px;
+    background: $color-icon-bg;
+    border-radius: $radius-sm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 18px;
+
+    svg {
+      width: 22px;
+      height: 22px;
+      color: $color-blue;
+    }
+  }
+
+  &__title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: $color-text;
+    margin-bottom: 10px;
+    letter-spacing: -0.01em;
+  }
+
+  &__desc {
+    font-size: 0.875rem;
+    line-height: 1.6;
+    color: $color-text-muted;
+  }
+}

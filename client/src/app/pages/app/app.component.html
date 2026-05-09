@@ -1,5 +1,91 @@
-<div class="container">
-  <h1>{{ title() }} 👋</h1>
-  <router-outlet></router-outlet>
+<div class="page-wrapper">
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="navbar__brand">
+      <svg class="navbar__icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 3L4 7V13C4 17.42 7.61 21.55 12 22C16.39 21.55 20 17.42 20 13V7L12 3Z"
+              stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+      </svg>
+      <span class="navbar__name">ResolveAI</span>
+    </div>
+    <div class="navbar__links">
+      <a href="#" class="navbar__link">How it works</a>
+      <a href="#" class="navbar__link">Pricing</a>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <main class="hero">
+    <div class="hero__badge">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 3L4 7V13C4 17.42 7.61 21.55 12 22C16.39 21.55 20 17.42 20 13V7L12 3Z"
+              stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+      </svg>
+      <span>AI-Powered Conflict Resolution</span>
+    </div>
+
+    <h1 class="hero__title">
+      Resolve disputes before they<br>escalate
+    </h1>
+
+    <p class="hero__subtitle">
+      AI-assisted mediation for landlord-tenant disputes, workplace conflicts,<br>
+      and contract disagreements. Save time and money with intelligent conflict resolution.
+    </p>
+
+    <div class="hero__actions">
+      <button class="btn btn--primary" (click)="createRoom()">
+        Create Room
+        <span class="btn__arrow">→</span>
+      </button>
+      <button class="btn btn--secondary" (click)="joinRoom()">
+        Join Room
+      </button>
+    </div>
+  </main>
+
+  <!-- Feature Cards -->
+  <section class="features">
+    <div class="feature-card">
+      <div class="feature-card__icon">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M21 15C21 15.5304 20.7893 16.0391 20.4142 16.4142C20.0391 16.7893 19.5304 17 19 17H7L3 21V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H19C19.5304 3 20.0391 3.21071 20.4142 3.58579C20.7893 3.96086 21 4.46957 21 5V15Z"
+                stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <h3 class="feature-card__title">Real-time Mediation</h3>
+      <p class="feature-card__desc">AI mediator facilitates conversation between parties in a neutral, structured environment</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-card__icon">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z"
+                stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <polyline points="14 2 14 8 20 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <line x1="16" y1="13" x2="8" y2="13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="16" y1="17" x2="8" y2="17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <polyline points="10 9 9 9 8 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <h3 class="feature-card__title">Smart Agreement Drafting</h3>
+      <p class="feature-card__desc">Generate fair agreements based on conversation context and legal best practices</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-card__icon">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M17 21V19C17 17.9391 16.5786 16.9217 15.8284 16.1716C15.0783 15.4214 14.0609 15 13 15H5C3.93913 15 2.92172 15.4214 2.17157 16.1716C1.42143 16.9217 1 17.9391 1 19V21"
+                stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="9" cy="7" r="4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M23 21V19C22.9993 18.1137 22.7044 17.2528 22.1614 16.5523C21.6184 15.8519 20.8581 15.3516 20 15.13"
+                stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M16 3.13C16.8604 3.35031 17.623 3.85071 18.1676 4.55232C18.7122 5.25392 19.0078 6.11683 19.0078 7.005C19.0078 7.89318 18.7122 8.75608 18.1676 9.45769C17.623 10.1593 16.8604 10.6597 16 10.88"
+                stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <h3 class="feature-card__title">Private & Secure</h3>
+      <p class="feature-card__desc">End-to-end encrypted rooms with optional anonymous participation</p>
+    </div>
+  </section>
 </div>
-  
