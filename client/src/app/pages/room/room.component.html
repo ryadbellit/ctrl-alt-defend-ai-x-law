@@ -68,10 +68,6 @@
   <!-- ── MAIN CHAT ──────────────────────────────────────────────── -->
   <main class="chat-area">
     <header class="chat-header">
-      <div class="chat-header__left">
-        <h1 class="chat-header__title">{{ roomTitle }}</h1>
-        <span class="chat-header__subtitle">{{ roomSubtitle }}</span>
-      </div>
       <div class="chat-header__status" [class.active]="sessionActive">
         <span class="status-dot"></span>
         <span>Session active</span>
@@ -84,7 +80,7 @@
         *ngFor="let msg of messages"
         [class.message--ai]="msg.isAI"
       >
-        <div class="message__avatar" [style.background]="getAvatarColor(msg.role)">
+        <div class="message__avatar" [style.background]="getAvatarColor(msg.sender)">
           {{ getInitial(msg.sender) }}
         </div>
         <div class="message__body">

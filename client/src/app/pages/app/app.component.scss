@@ -5,37 +5,30 @@ $color-text-muted:  #6b7280;
 $color-primary:     #111827;
 $color-border:      #e5e7eb;
 $color-blue:        #3b82f6;
+$color-blue-dark:   #2563eb;
 $color-blue-light:  #eff6ff;
 $color-badge-bg:    #f0f4ff;
 $color-badge-text:  #3b63d6;
 $color-card-bg:     #f9fafb;
 $color-icon-bg:     #eff6ff;
 
-$font-display: 'Georgia', 'Times New Roman', serif;
-$font-body:    'system-ui', -apple-system, sans-serif;
+$font: 'Segoe UI', 'SF Pro Display', -apple-system, sans-serif;
 
 $radius-sm:   8px;
 $radius-md:   12px;
 $radius-lg:   16px;
 $radius-full: 999px;
 
-$shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-$shadow-btn:  0 1px 2px rgba(0, 0, 0, 0.08);
+$shadow-card: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+$shadow-btn:  0 1px 2px rgba(0,0,0,0.08);
 
-// ─── Reset & Base ─────────────────────────────────────────────────────────────
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-// ─── Page Wrapper ─────────────────────────────────────────────────────────────
+// ─── Page ─────────────────────────────────────────────────────────────────────
 .page-wrapper {
   min-height: 100vh;
   background-color: $color-bg;
-  font-family: $font-body;
+  font-family: $font;
   color: $color-text;
 }
 
@@ -54,7 +47,6 @@ $shadow-btn:  0 1px 2px rgba(0, 0, 0, 0.08);
     font-size: 1rem;
     font-weight: 600;
     color: $color-text;
-    text-decoration: none;
   }
 
   &__icon {
@@ -63,9 +55,7 @@ $shadow-btn:  0 1px 2px rgba(0, 0, 0, 0.08);
     color: $color-blue;
   }
 
-  &__name {
-    letter-spacing: -0.01em;
-  }
+  &__name { letter-spacing: -0.01em; }
 
   &__links {
     display: flex;
@@ -78,10 +68,7 @@ $shadow-btn:  0 1px 2px rgba(0, 0, 0, 0.08);
     color: $color-text-muted;
     text-decoration: none;
     transition: color 0.2s ease;
-
-    &:hover {
-      color: $color-text;
-    }
+    &:hover { color: $color-text; }
   }
 }
 
@@ -104,13 +91,7 @@ $shadow-btn:  0 1px 2px rgba(0, 0, 0, 0.08);
     padding: 7px 14px;
     border-radius: $radius-full;
     margin-bottom: 28px;
-    letter-spacing: 0.01em;
-
-    svg {
-      width: 14px;
-      height: 14px;
-      flex-shrink: 0;
-    }
+    svg { width: 14px; height: 14px; }
   }
 
   &__title {
@@ -118,7 +99,6 @@ $shadow-btn:  0 1px 2px rgba(0, 0, 0, 0.08);
     font-weight: 800;
     line-height: 1.12;
     letter-spacing: -0.03em;
-    color: $color-text;
     max-width: 720px;
     margin-bottom: 22px;
   }
@@ -148,35 +128,29 @@ $shadow-btn:  0 1px 2px rgba(0, 0, 0, 0.08);
   padding: 14px 28px;
   font-size: 0.95rem;
   font-weight: 600;
-  font-family: $font-body;
+  font-family: $font;
   border-radius: $radius-md;
   border: 1.5px solid transparent;
   cursor: pointer;
   transition: all 0.18s ease;
-  text-decoration: none;
   letter-spacing: -0.01em;
 
   &--primary {
     background: $color-primary;
-    color: #ffffff;
+    color: #fff;
     border-color: $color-primary;
     box-shadow: $shadow-btn;
 
     &:hover {
       background: #1f2937;
-      border-color: #1f2937;
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.18);
     }
-
-    &:active {
-      transform: translateY(0);
-      box-shadow: $shadow-btn;
-    }
+    &:active { transform: translateY(0); }
   }
 
   &--secondary {
-    background: #ffffff;
+    background: #fff;
     color: $color-text;
     border-color: $color-border;
     box-shadow: $shadow-btn;
@@ -186,24 +160,13 @@ $shadow-btn:  0 1px 2px rgba(0, 0, 0, 0.08);
       border-color: #d1d5db;
       transform: translateY(-1px);
     }
-
-    &:active {
-      transform: translateY(0);
-    }
+    &:active { transform: translateY(0); }
   }
 
-  &__arrow {
-    font-size: 1.1rem;
-    line-height: 1;
-    transition: transform 0.18s ease;
-  }
-
-  &--primary:hover &__arrow {
-    transform: translateX(3px);
-  }
+  &__arrow { font-size: 1.1rem; }
 }
 
-// ─── Feature Cards ────────────────────────────────────────────────────────────
+// ─── Features ─────────────────────────────────────────────────────────────────
 .features {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -223,10 +186,10 @@ $shadow-btn:  0 1px 2px rgba(0, 0, 0, 0.08);
   border: 1px solid $color-border;
   border-radius: $radius-lg;
   padding: 28px 24px;
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  transition: box-shadow 0.2s, transform 0.2s;
 
   &:hover {
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
     transform: translateY(-2px);
   }
 
@@ -239,20 +202,14 @@ $shadow-btn:  0 1px 2px rgba(0, 0, 0, 0.08);
     align-items: center;
     justify-content: center;
     margin-bottom: 18px;
-
-    svg {
-      width: 22px;
-      height: 22px;
-      color: $color-blue;
-    }
+    svg { width: 22px; height: 22px; color: $color-blue; }
   }
 
   &__title {
     font-size: 1rem;
     font-weight: 700;
-    color: $color-text;
-    margin-bottom: 10px;
     letter-spacing: -0.01em;
+    margin-bottom: 10px;
   }
 
   &__desc {
@@ -260,4 +217,214 @@ $shadow-btn:  0 1px 2px rgba(0, 0, 0, 0.08);
     line-height: 1.6;
     color: $color-text-muted;
   }
+}
+
+// ─── JOIN MODAL ───────────────────────────────────────────────────────────────
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  animation: overlayIn 0.2s ease both;
+}
+
+@keyframes overlayIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.modal {
+  background: #fff;
+  border: 1px solid $color-border;
+  border-radius: 20px;
+  padding: 36px 32px 32px;
+  width: 100%;
+  max-width: 420px;
+  position: relative;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.06);
+  animation: modalIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+
+  &__close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: $color-text-muted;
+    transition: all 0.15s ease;
+
+    svg { width: 16px; height: 16px; }
+
+    &:hover { background: $color-card-bg; color: $color-text; }
+  }
+
+  &__icon {
+    width: 50px;
+    height: 50px;
+    background: $color-blue-light;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 18px;
+    color: $color-blue;
+    svg { width: 24px; height: 24px; }
+  }
+
+  &__title {
+    font-size: 1.4rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    text-align: center;
+    margin-bottom: 6px;
+  }
+
+  &__subtitle {
+    font-size: 0.875rem;
+    color: $color-text-muted;
+    text-align: center;
+    margin-bottom: 28px;
+  }
+
+  &__code-group {
+    margin-bottom: 20px;
+  }
+
+  &__label {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: $color-text;
+    letter-spacing: 0.01em;
+    margin-bottom: 8px;
+  }
+
+  &__code-inputs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  &__code-box {
+    height: 52px;
+    border: 1.5px solid $color-border;
+    border-radius: 10px;
+    text-align: center;
+    font-size: 1.2rem;
+    font-weight: 700;
+    font-family: $font;
+    color: $color-text;
+    background: $color-card-bg;
+    outline: none;
+    transition: all 0.15s ease;
+    text-transform: uppercase;
+
+    &--letter { width: calc((100% - 6px - 4 * 6px - 4 * 44px) / 3); flex: 1; }
+    &--digit  { width: 44px; flex-shrink: 0; }
+
+    &:focus {
+      border-color: $color-blue;
+      background: $color-blue-light;
+      box-shadow: 0 0 0 3px rgba($color-blue, 0.1);
+    }
+
+    &:not(:placeholder-shown):not(:focus) {
+      border-color: darken($color-border, 8%);
+    }
+  }
+
+  &__code-dash {
+    font-size: 1.2rem;
+    color: $color-text-muted;
+    flex-shrink: 0;
+    padding: 0 2px;
+  }
+
+  &__field {
+    margin-bottom: 20px;
+  }
+
+  &__input {
+    width: 100%;
+    padding: 12px 14px;
+    font-size: 0.9rem;
+    font-family: $font;
+    color: $color-text;
+    background: #fff;
+    border: 1.5px solid $color-border;
+    border-radius: 10px;
+    outline: none;
+    transition: all 0.15s ease;
+
+    &::placeholder { color: #c4c9d4; }
+
+    &:focus {
+      border-color: $color-blue;
+      box-shadow: 0 0 0 3px rgba($color-blue, 0.1);
+    }
+  }
+
+  &__error {
+    font-size: 0.8rem;
+    color: #ef4444;
+    margin-bottom: 14px;
+    text-align: center;
+  }
+
+  &__join-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 14px;
+    background: $color-blue;
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 700;
+    font-family: $font;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba($color-blue, 0.35);
+    transition: all 0.18s ease;
+    letter-spacing: -0.01em;
+
+    svg { width: 18px; height: 18px; }
+
+    &:hover:not(:disabled) {
+      background: $color-blue-dark;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba($color-blue, 0.4);
+    }
+
+    &:active:not(:disabled) { transform: translateY(0); }
+
+    &:disabled { opacity: 0.6; cursor: not-allowed; }
+  }
+
+  &__spinner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    svg { width: 20px; height: 20px; animation: spin 0.8s linear infinite; }
+  }
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(16px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }

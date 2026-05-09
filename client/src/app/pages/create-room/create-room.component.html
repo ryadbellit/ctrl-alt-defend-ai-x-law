@@ -1,0 +1,107 @@
+<div class="cr-page">
+
+  <!-- Background decoration -->
+  <div class="cr-page__bg">
+    <div class="cr-page__blob cr-page__blob--1"></div>
+    <div class="cr-page__blob cr-page__blob--2"></div>
+    <div class="cr-page__grid"></div>
+  </div>
+
+  <!-- Back button -->
+  <button class="cr-back" (click)="goBack()">
+    <svg viewBox="0 0 24 24" fill="none"><polyline points="15 18 9 12 15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Back
+  </button>
+
+  <!-- Card -->
+  <div class="cr-card" [class.cr-card--ready]="step === 'ready'">
+
+    <!-- ── STEP: FORM ───────────────────────────────── -->
+    <ng-container *ngIf="step === 'form'">
+      <div class="cr-card__header">
+        <div class="cr-card__icon">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 3L4 7V13C4 17.42 7.61 21.55 12 22C16.39 21.55 20 17.42 20 13V7L12 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        </div>
+        <h1 class="cr-card__title">Create a Room</h1>
+        <p class="cr-card__subtitle">Set up your private mediation space</p>
+      </div>
+
+      <!-- Room Code preview -->
+      <div class="cr-code-preview">
+        <span class="cr-code-preview__label">Your room code</span>
+        <div class="cr-code-preview__row">
+          <span class="cr-code-preview__code">{{ roomCode }}</span>
+          <button class="cr-code-preview__refresh" (click)="refreshCode()" title="Generate new code">
+            <svg viewBox="0 0 24 24" fill="none"><polyline points="23 4 23 10 17 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="1 20 1 14 7 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Form fields -->
+      <div class="cr-form">
+
+        <div class="cr-field">
+          <label class="cr-field__label">Your name</label>
+          <input
+            class="cr-field__input"
+            type="text"
+            placeholder="Enter your name…"
+            [(ngModel)]="userName"
+          />
+        </div>
+
+        <button
+          class="cr-submit"
+          (click)="createRoom()"
+          [disabled]="!userName.trim() || isCreating"
+          [class.cr-submit--loading]="isCreating"
+        >
+          <span *ngIf="!isCreating">
+            Create Room
+            <svg viewBox="0 0 24 24" fill="none"><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><polyline points="12 5 19 12 12 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="cr-submit__spinner" *ngIf="isCreating">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2.5" stroke-dasharray="60" stroke-dashoffset="20" stroke-linecap="round"/></svg>
+            Creating room…
+          </span>
+        </button>
+      </div>
+    </ng-container>
+
+    <!-- ── STEP: READY ──────────────────────────────── -->
+    <ng-container *ngIf="step === 'ready'">
+      <div class="cr-ready">
+        <div class="cr-ready__checkmark">
+          <svg viewBox="0 0 52 52" fill="none">
+            <circle cx="26" cy="26" r="24" stroke="#22c55e" stroke-width="3"/>
+            <polyline points="14 27 22 35 38 18" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h2 class="cr-ready__title">Room Created!</h2>
+        <p class="cr-ready__sub">Share this code with the other party</p>
+
+        <div class="cr-ready__code-box">
+          <span class="cr-ready__code">{{ roomCode }}</span>
+          <button class="cr-ready__copy" (click)="copyCode()">
+            <svg *ngIf="!codeCopied" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="13" height="13" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <svg *ngIf="codeCopied" viewBox="0 0 24 24" fill="none"><polyline points="20 6 9 17 4 12" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            {{ codeCopied ? 'Copied!' : 'Copy' }}
+          </button>
+        </div>
+
+        <div class="cr-ready__meta">
+          <span class="cr-ready__host">Host: {{ userName }}</span>
+        </div>
+
+        <div class="cr-ready__actions">
+          <button class="cr-ready__enter" (click)="enterRoom()">
+            Enter Room
+            <svg viewBox="0 0 24 24" fill="none"><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><polyline points="12 5 19 12 12 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <p class="cr-ready__hint">The room will stay active until all parties leave</p>
+        </div>
+      </div>
+    </ng-container>
+
+  </div>
+</div>

@@ -1,21 +1,24 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import {
+  Component,
+  OnInit,
+  ViewChild,
+  ElementRef,
+  AfterViewChecked,
+  ChangeDetectorRef,
+  OnDestroy,
+} from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { RoomsService, RoomParticipant } from '../../services/rooms.service';
 
 export interface Message {
   id: number;
   sender: string;
-  role: 'ai' | 'tenant' | 'landlord';
+  role: string;
   time: string;
   text: string;
   isAI?: boolean;
-}
-
-export interface Participant {
-  name: string;
-  role: string;
-  initial: string;
-  color: string;
-  online: boolean;
 }
 
 export interface InsightPoint {
@@ -24,71 +27,119 @@ export interface InsightPoint {
 
 @Component({
   selector: 'app-room',
+  standalone: true,
+  imports: [CommonModule, FormsModule],
   templateUrl: './room.component.html',
-  styleUrls: ['./room.component.scss']
+  styleUrls: ['./room.component.scss'],
 })
-export class RoomComponent implements OnInit, AfterViewChecked {
+export class RoomComponent implements OnInit, AfterViewChecked, OnDestroy {
   @ViewChild('messagesContainer') messagesContainer!: ElementRef;
 
-  roomCode = 'MTN-4782';
-  roomTitle = 'Public Mediation';
-  roomSubtitle = 'Landlord-Tenant Heating Dispute';
-  sessionActive = true;
+  roomCode = 'UNKNOWN';
+  currentUserName = '';
+
+  sessionActive = false;
   activeTab: 'public' | 'private' | 'agreement' = 'public';
   newMessage = '';
   codeCopied = false;
+  isLoading = true;
 
-  participants: Participant[] = [
-    { name: 'Sarah Chen', role: 'Tenant', initial: 'S', color: '#e879f9', online: true },
-    { name: 'Mark Rodriguez', role: 'Landlord', initial: 'M', color: '#a855f7', online: true },
-    { name: 'AI Mediator', role: 'Facilitator', initial: 'O', color: '#3b82f6', online: true },
-  ];
+  participants: RoomParticipant[] = [];
 
-  messages: Message[] = [
-    {
-      id: 1,
-      sender: 'AI Mediator',
-      role: 'ai',
-      time: '2:34 PM',
-      isAI: true,
-      text: "Welcome to your mediation session. I'm here to facilitate a fair and productive conversation. Each party will have the opportunity to share their perspective. Let's begin by having Sarah share her main concerns."
-    },
-    {
-      id: 2,
-      sender: 'Sarah Chen',
-      role: 'tenant',
-      time: '2:35 PM',
-      text: "Thank you. I've been renting apartment 4B for 18 months. Last month, the heating stopped working completely. I reported it immediately, but it took 3 weeks to get it fixed. It was freezing, and I had to buy space heaters. I don't think I should pay full rent for that month."
-    },
-    {
-      id: 3,
-      sender: 'Mark Rodriguez',
-      role: 'landlord',
-      time: '2:37 PM',
-      text: "I understand Sarah's frustration, but there were complications. The heating system needed a specialized part that was on backorder. I ordered it the same day she reported the issue. I also offered to reduce rent by 15% for that month."
+  messages: Message[] = [];
+
+  agreements: InsightPoint[] = [];
+  disagreements: InsightPoint[] = [];
+  compromises: InsightPoint[] = [];
+
+  private roomSocket?: WebSocket;
+
+  constructor(
+    private route: ActivatedRoute,
+    private router: Router,
+    private roomsService: RoomsService,
+    private cdr: ChangeDetectorRef,
+  ) {}
+
+  async ngOnInit(): Promise<void> {
+    this.roomCode =
+      this.route.snapshot.queryParamMap.get('code')?.toUpperCase() ?? 'UNKNOWN';
+
+    this.currentUserName =
+      this.route.snapshot.queryParamMap.get('name')?.trim() ?? '';
+
+    if (this.roomCode === 'UNKNOWN') {
+      this.router.navigate(['/']);
+      return;
     }
-  ];
 
-  sarahTone = 72;
-  markTone = 58;
+    await this.loadRoom();
+  }
 
-  agreements: InsightPoint[] = [
-    { text: 'Heating issue was legitimate and disruptive' },
-    { text: "Parts delay was beyond landlord's control" },
-    { text: 'Some form of compensation is appropriate' },
-  ];
+  ngOnDestroy(): void {
+    this.roomSocket?.close();
+  }
 
-  disagreements: InsightPoint[] = [
-    { text: 'Amount of rent reduction (15% vs. higher)' },
-    { text: 'Reimbursement for space heater expenses' },
-  ];
+  async loadRoom(): Promise<void> {
+    this.isLoading = true;
 
-  compromises: InsightPoint[] = [
-    { text: '25–30% rent reduction for affected month' },
-    { text: 'Partial reimbursement for space heater costs (~$80)' },
-  ];
+    try {
+      const room = await this.roomsService.getRoom(this.roomCode);
 
-  ngOnInit(): void {}
+      this.roomCode = room.code;
+      this.participants = room.participants;
+      this.sessionActive = true;
+
+      if (!this.currentUserName) {
+        this.currentUserName = room.hostName;
+      }
+
+      this.messages = [
+        {
+          id: 1,
+          sender: 'AI Mediator',
+          role: 'ai',
+          time: this.formatTime(new Date()),
+          isAI: true,
+          text: `Welcome to room ${room.code}. The mediation session is ready. Participants can now discuss the situation respectfully.`,
+        },
+      ];
+    } catch (error) {
+      console.error('Unable to load room:', error);
+      this.sessionActive = false;
+      this.router.navigate(['/']);
+    } finally {
+      this.isLoading = false;
+      this.cdr.detectChanges();
+    }
+
+    const room = await this.roomsService.getRoom(this.roomCode);
+
+    this.roomCode = room.code;
+    this.participants = room.participants;
+    this.sessionActive = true;
+
+    this.connectToLiveRoomUpdates();
+  }
+
+  private connectToLiveRoomUpdates(): void {
+    this.roomSocket?.close();
+
+    this.roomSocket = this.roomsService.connectToRoomUpdates(
+      this.roomCode,
+      (room) => {
+        this.roomCode = room.code;
+        this.participants = room.participants;
+        this.sessionActive = true;
+        this.cdr.detectChanges();
+      },
+      (message) => {
+        console.error(message);
+        this.sessionActive = false;
+        this.cdr.detectChanges();
+      },
+    );
+  }
 
   ngAfterViewChecked(): void {
     this.scrollToBottom();
@@ -98,31 +149,36 @@ export class RoomComponent implements OnInit, AfterViewChecked {
     try {
       const el = this.messagesContainer.nativeElement;
       el.scrollTop = el.scrollHeight;
-    } catch (e) {}
+    } catch {
+      // Ignore if view is not ready yet.
+    }
   }
 
   copyCode(): void {
     navigator.clipboard.writeText(this.roomCode);
     this.codeCopied = true;
-    setTimeout(() => this.codeCopied = false, 2000);
+    setTimeout(() => {
+      this.codeCopied = false;
+      this.cdr.detectChanges();
+    }, 2000);
   }
 
   sendMessage(): void {
     const text = this.newMessage.trim();
     if (!text) return;
 
-    const now = new Date();
-    const time = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const participant = this.getCurrentParticipant();
 
     this.messages.push({
       id: this.messages.length + 1,
-      sender: 'Sarah Chen',
-      role: 'tenant',
-      time,
-      text
+      sender: participant?.name ?? this.currentUserName ?? 'Guest',
+      role: participant?.role ?? 'Participant',
+      time: this.formatTime(new Date()),
+      text,
     });
 
     this.newMessage = '';
+    this.cdr.detectChanges();
   }
 
   onKeydown(event: KeyboardEvent): void {
@@ -133,20 +189,38 @@ export class RoomComponent implements OnInit, AfterViewChecked {
   }
 
   getInitial(sender: string): string {
-    if (sender === 'AI Mediator') return 'O';
-    return sender.charAt(0);
+    const participant = this.participants.find((p) => p.name === sender);
+    return participant?.initial ?? sender.charAt(0).toUpperCase();
   }
 
-  getAvatarColor(role: string): string {
-    const map: Record<string, string> = {
-      ai: '#3b82f6',
-      tenant: '#e879f9',
-      landlord: '#a855f7',
-    };
-    return map[role] || '#6b7280';
+  getAvatarColor(roleOrSender: string): string {
+    const participant = this.participants.find(
+      (p) => p.role === roleOrSender || p.name === roleOrSender,
+    );
+
+    if (participant) {
+      return participant.color;
+    }
+
+    if (roleOrSender === 'ai') {
+      return '#3b82f6';
+    }
+
+    return '#6b7280';
   }
 
   setTab(tab: 'public' | 'private' | 'agreement'): void {
     this.activeTab = tab;
+  }
+
+  private getCurrentParticipant(): RoomParticipant | undefined {
+    return this.participants.find((p) => p.name === this.currentUserName);
+  }
+
+  private formatTime(date: Date): string {
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   }
 }
