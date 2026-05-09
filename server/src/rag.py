@@ -1,14 +1,18 @@
 import os
-import google.generativeai as genai
-from google.generativeai import types
+from google import genai
+from google.genai import types
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()  # reads the .env at project root
 
 # -------------------------------------------------------
 # Configuration
 # -------------------------------------------------------
 
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-MODEL = "gemini-1.5-pro"
+# New SDK uses a Client object, not genai.configure()
+client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+MODEL = "gemini-3-flash-preview"
 
 
 # -------------------------------------------------------
@@ -23,7 +27,9 @@ def create_store(display_name: str) -> str:
 
     Returns the store resource name (e.g. 'fileSearchStores/abc-123').
     """
-    store = genai.create_file_search_store(display_name=display_name)
+    store = client.file_search_stores.create(
+        config={"display_name": display_name}
+    )
     print(f"Store created: {store.name}")
     return store.name
 
@@ -34,11 +40,6 @@ def get_store_name() -> str:
     Make sure FILE_SEARCH_STORE_NAME is set in your .env file.
     """
     store_name = os.environ.get("FILE_SEARCH_STORE_NAME")
-    if not store_name:
-        raise ValueError(
-            "FILE_SEARCH_STORE_NAME is not set. "
-            "Run create_store() once and save the result to your .env file."
-        )
     return store_name
 
 
@@ -46,10 +47,11 @@ def get_store_name() -> str:
 # Ingestion
 # -------------------------------------------------------
 
+import time
+
 def ingest_document(file_path: str, metadata: dict = {}) -> None:
     """
     Upload and index a legal document (PDF, TXT, DOCX) into the File Search Store.
-    This is called by the Celery worker when a new case document is uploaded.
 
     Args:
         file_path: Local path to the file (e.g. '/tmp/jugement_2023.pdf')
@@ -64,11 +66,26 @@ def ingest_document(file_path: str, metadata: dict = {}) -> None:
 
     print(f"Ingesting {path.name} into store {store_name}...")
 
-    genai.upload_to_file_search_store(
-        file_search_store=store_name,
-        path=str(path),
-        metadata=metadata,
+    # Build custom metadata list from dict
+    custom_metadata = [
+        {"key": k, "string_value": str(v)} for k, v in metadata.items()
+    ]
+
+    # Upload and index the file (returns a Long Running Operation)
+    operation = client.file_search_stores.upload_to_file_search_store(
+        file=str(path),
+        file_search_store_name=store_name,
+        config={
+            "display_name": path.name,
+            "custom_metadata": custom_metadata
+        }
     )
+
+    # Wait for indexing to complete before returning
+    while not operation.done:
+        print("Indexing in progress...")
+        time.sleep(5)
+        operation = client.operations.get(operation)
 
     print(f"Done: {path.name} indexed successfully.")
 
@@ -77,10 +94,6 @@ def ingest_folder(folder_path: str, metadata: dict = {}) -> None:
     """
     Ingest all PDFs and text files in a folder.
     Useful for the non-coder teammate to bulk-upload legal cases.
-
-    Args:
-        folder_path: Path to folder containing legal documents
-        metadata:    Shared metadata applied to all files in the folder
     """
     folder = Path(folder_path)
     supported = {".pdf", ".txt", ".docx", ".md"}
@@ -104,92 +117,89 @@ def ingest_folder(folder_path: str, metadata: dict = {}) -> None:
 # -------------------------------------------------------
 
 def get_resolution_suggestion(case_description: str) -> dict:
-    """
-    Given a description of a dispute, retrieve similar past cases
-    and return a resolution suggestion with cited sources.
-
-    Args:
-        case_description: Free-text description of the current dispute
-
-    Returns:
-        {
-            "suggestion": "...",   # AI-generated resolution suggestion
-            "sources": [...]       # List of cited document names
-        }
-    """
     store_name = get_store_name()
-    model = genai.GenerativeModel(MODEL)
 
     prompt = f"""
-    You are a legal mediator assistant specializing in small claims and civil rights cases in Quebec, Canada.
+    You are a legal mediator for Quebec small claims court.
 
-    Based on the following dispute, analyze similar past cases and suggest a fair resolution.
-    Always cite the specific past cases that inform your suggestion.
-    Be concise, neutral, and focus on what a mediator would recommend.
+    INSTRUCTIONS:
+    - Search the documents for similar past cases
+    - At the END of your response, add a section called "SOURCES:" 
+    - In that section, list the exact display_name of every document you used
+    - Format: SOURCES: [document1.txt, document2.txt]
+    - If no document was found, write SOURCES: []
 
-    Dispute description:
-    {case_description}
+    Dispute: {case_description}
     """
 
-    response = model.generate_content(
-        prompt,
-        tools=[
-            types.Tool(
-                file_search=types.FileSearchTool(
-                    file_search_store_names=[store_name]
+    response = client.models.generate_content(
+        model=MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            tools=[
+                types.Tool(
+                    file_search=types.FileSearch(
+                        file_search_store_names=[store_name]
+                    )
                 )
-            )
-        ]
+            ]
+        )
     )
 
-    # Extract cited sources from the response metadata
+    # Extraire les sources depuis le texte de la réponse
+    import re
+    text = response.text
     sources = []
-    if hasattr(response, "candidates"):
-        for candidate in response.candidates:
-            if hasattr(candidate, "grounding_metadata"):
-                for chunk in candidate.grounding_metadata.grounding_chunks:
-                    if hasattr(chunk, "retrieved_context"):
-                        sources.append(chunk.retrieved_context.title)
+
+    match = re.search(r'SOURCES:\s*\[([^\]]*)\]', text)
+    if match:
+        raw = match.group(1).strip()
+        if raw:
+            sources = [s.strip() for s in raw.split(",")]
+        # Nettoyer le texte pour ne pas afficher la ligne SOURCES
+        text = text[:match.start()].strip()
 
     return {
-        "suggestion": response.text,
-        "sources": list(set(sources))  # deduplicate
+        "suggestion": text,
+        "sources": sources
     }
-
 
 def get_relevant_laws(case_description: str) -> str:
     """
     Retrieve relevant laws and articles applicable to the dispute.
-    Useful to surface to both parties during mediation.
     """
     store_name = get_store_name()
-    model = genai.GenerativeModel(MODEL)
 
     prompt = f"""
-    You are a legal research assistant for Quebec small claims court.
-    Given the following dispute, identify the most relevant laws,
-    articles, and legal precedents that apply. Be specific and cite sources.
+    You are a legal mediator for Quebec small claims court.
+    STRICT RULES:
+    - ONLY cite cases that exist verbatim in the provided documents
+    - If no relevant case exists in the documents, say "Aucun cas similaire trouvé dans la base de données"
+    - NEVER invent or hallucinate case references
+    - Always mention the exact case number from the document
 
-    Dispute:
-    {case_description}
+    Dispute: {case_description}
     """
 
-    response = model.generate_content(
-        prompt,
-        tools=[
-            types.Tool(
-                file_search=types.FileSearchTool(
-                    file_search_store_names=[store_name]
+    response = client.models.generate_content(
+        model=MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            tools=[
+                types.Tool(
+                    file_search=types.FileSearch(
+                        file_search_store_names=[store_name]
+                    )
                 )
-            )
-        ]
+            ]
+        )
     )
 
     return response.text
 
 
 # -------------------------------------------------------
-# FastAPI Route (import this in your routes/rag.py)
+# FastAPI Routes (import this in your routes/rag.py)
 # -------------------------------------------------------
 
 from fastapi import APIRouter, HTTPException
@@ -204,9 +214,6 @@ class CaseQuery(BaseModel):
 
 @router.post("/suggest")
 def suggest_resolution(body: CaseQuery):
-    """
-    Called when both parties request an AI-assisted resolution suggestion.
-    """
     try:
         result = get_resolution_suggestion(body.case_description)
         return result
@@ -216,9 +223,6 @@ def suggest_resolution(body: CaseQuery):
 
 @router.post("/laws")
 def relevant_laws(body: CaseQuery):
-    """
-    Returns relevant laws and articles for the current dispute.
-    """
     try:
         result = get_relevant_laws(body.case_description)
         return {"laws": result}
@@ -228,10 +232,6 @@ def relevant_laws(body: CaseQuery):
 
 @router.post("/ingest")
 def ingest(file_path: str, metadata: dict = {}):
-    """
-    Ingest a single document into the RAG store.
-    In production, this should be called by the Celery worker, not directly.
-    """
     try:
         ingest_document(file_path, metadata)
         return {"status": "ok", "file": file_path}
@@ -239,3 +239,16 @@ def ingest(file_path: str, metadata: dict = {}):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# -------------------------------------------------------
+# Run this ONCE to create your store, then delete it
+# -------------------------------------------------------
+
+if __name__ == "__main__":
+    result = get_resolution_suggestion(
+        "Quel est le montant exact de la pénalité dans le cas ZEBRA-9999?"
+    )
+    print(result["suggestion"])
+    print("Suggestion:", result["suggestion"])
+    print("Sources:", result["sources"])
