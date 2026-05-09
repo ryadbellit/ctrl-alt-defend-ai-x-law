@@ -3,8 +3,13 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from rag import router as rag_router
-from rooms import router as rooms_router
+
+try:
+    from .rag import router as rag_router
+    from .rooms import router as rooms_router
+except ImportError:
+    from rag import router as rag_router
+    from rooms import router as rooms_router
 
 load_dotenv()
 
