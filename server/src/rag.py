@@ -18,7 +18,7 @@ load_dotenv()
 # -------------------------------------------------------
 
 _client = None
-MODEL = "gemini-3-flash-preview"
+MODEL = "gemini-2.5-flash-lite"
 _gemini_disabled_until = 0.0
 
 def get_client():
@@ -370,8 +370,8 @@ Conversation:
 """.strip()
 
     try:
-        if _gemini_is_temporarily_disabled() or not os.environ.get("GEMINI_API_KEY"):
-            return _local_public_mediation(public_messages)
+        #if _gemini_is_temporarily_disabled() or not os.environ.get("GEMINI_API_KEY"):
+        #    return _local_public_mediation(public_messages)
 
         response = get_client().models.generate_content(
             model=MODEL,
@@ -396,8 +396,10 @@ Conversation:
             "compromises": parsed.get("compromises", []),
         }
     except Exception as exc:
+        print(exc)
+
         if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc):
-            _disable_gemini_for(900)
+            #_disable_gemini_for(900)
             return _local_public_mediation(public_messages)
         print(f"Mediation generation failed: {exc}")
         return _local_public_mediation(public_messages)
