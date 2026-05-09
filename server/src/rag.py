@@ -15,8 +15,18 @@ load_dotenv()
 # Configuration
 # -------------------------------------------------------
 
-client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+_client = None
 MODEL = "gemini-3-flash-preview"
+
+def get_client():
+    """Lazy initialization of Gemini client to avoid crash if API key is missing."""
+    global _client
+    if _client is None:
+        api_key = os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY is not set in environment variables. Please set it to use RAG features.")
+        _client = genai.Client(api_key=api_key)
+    return _client
 
 router = APIRouter()
 
@@ -31,7 +41,7 @@ def create_store(display_name: str) -> str:
     Call this ONCE when setting up the project — save the returned
     store name in your .env as FILE_SEARCH_STORE_NAME.
     """
-    store = client.file_search_stores.create(
+    store = get_client().file_search_stores.create(
         config={"display_name": display_name}
     )
     print(f"Store created: {store.name}")
@@ -65,7 +75,7 @@ def ingest_document(file_path: str, metadata: dict = {}) -> None:
         {"key": k, "string_value": str(v)} for k, v in metadata.items()
     ]
 
-    operation = client.file_search_stores.upload_to_file_search_store(
+    operation = get_client().file_search_stores.upload_to_file_search_store(
         file=str(path),
         file_search_store_name=store_name,
         config={
@@ -77,7 +87,7 @@ def ingest_document(file_path: str, metadata: dict = {}) -> None:
     # Poll avec timeout
     intervals = [2, 2, 2, 5, 5, 5, 10, 10, 10, 15]
     for i, wait in enumerate(intervals):
-        operation = client.operations.get(operation)
+        operation = get_client().operations.get(operation)
         if operation.done:
             print(f"Done: {path.name} indexed in ~{sum(intervals[:i])}s")
             return
@@ -205,7 +215,7 @@ def query_rag(user_message: str, history: list[types.Content] = []) -> dict:
     # Retry automatique si rate limit
     for attempt in range(3):
         try:
-            response = client.models.generate_content(
+            response = get_client().models.generate_content(
                 model=MODEL,
                 contents=contents,
                 config=types.GenerateContentConfig(
