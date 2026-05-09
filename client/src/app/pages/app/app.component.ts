@@ -1,12 +1,23 @@
-import { Component, signal } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { Component } from '@angular/core';
+import { Router } from '@angular/router';
+import { CommonModule } from '@angular/common';
 
 @Component({
-  selector: 'app-root',
-  imports: [RouterOutlet],
+  selector: 'app-home',
+  standalone: true,
+  imports: [CommonModule],
   templateUrl: './app.component.html',
-  styleUrl: './app.component.scss'
+  styleUrls: ['./app.component.scss']
 })
-export class AppComponent {
-  protected readonly title = signal('client');
+export class HomeComponent {
+
+  constructor(private router: Router) {}
+
+  createRoom(): void {
+    this.router.navigate(['/create-room']);
+  }
+
+  joinRoom(): void {
+    this.router.navigate(['/join-room']);
+  }
 }
