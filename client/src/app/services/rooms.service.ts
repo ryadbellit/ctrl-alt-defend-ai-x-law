@@ -85,11 +85,18 @@ export class RoomsService {
     );
   }
 
-  sendPrivateMessage(message: string, history: ChatMessage[]): Promise<ChatResponse> {
+  sendPrivateMessage(
+    message: string,
+    history: ChatMessage[],
+    roomCode: string,
+    senderName: string,
+  ): Promise<ChatResponse> {
     return firstValueFrom(
       this.http.post<ChatResponse>(`${this.apiUrl.replace('/rooms', '')}/chat`, {
         message,
         history,
+        roomCode,
+        senderName,
       })
     );
   }

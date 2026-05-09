@@ -286,7 +286,10 @@ async def room_socket(websocket: WebSocket, code: str):
                 room = store.append_public_message(code, sender, text)
                 await manager.broadcast_room_state(code, room)
 
-                insights = await asyncio.to_thread(mediate_conversation, room["publicMessages"])
+                insights = await asyncio.to_thread(
+                    mediate_conversation,
+                    room["publicMessages"],
+                )
                 ai_reply = (insights.get("reply") or "").strip()
 
                 if ai_reply:

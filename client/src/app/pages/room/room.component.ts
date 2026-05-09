@@ -336,7 +336,12 @@ export class RoomComponent implements OnInit, AfterViewChecked, OnDestroy {
     this.cdr.detectChanges();
 
     try {
-      const response = await this.roomsService.sendPrivateMessage(text, historyBeforeSend);
+      const response = await this.roomsService.sendPrivateMessage(
+        text,
+        historyBeforeSend,
+        this.roomCode,
+        sender,
+      );
 
       this.privateMessages = [
         ...this.privateMessages,
