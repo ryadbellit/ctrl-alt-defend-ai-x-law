@@ -1,18 +1,24 @@
 import os
-from google import genai
-from google.genai import types
+import re
+import time
 from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()  # reads the .env at project root
+from google import genai
+from google.genai import types
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+load_dotenv()
 
 # -------------------------------------------------------
 # Configuration
 # -------------------------------------------------------
 
-# New SDK uses a Client object, not genai.configure()
 client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 MODEL = "gemini-3-flash-preview"
+
+router = APIRouter()
 
 
 # -------------------------------------------------------
@@ -24,8 +30,6 @@ def create_store(display_name: str) -> str:
     Create a new File Search Store.
     Call this ONCE when setting up the project — save the returned
     store name in your .env as FILE_SEARCH_STORE_NAME.
-
-    Returns the store resource name (e.g. 'fileSearchStores/abc-123').
     """
     store = client.file_search_stores.create(
         config={"display_name": display_name}
@@ -35,11 +39,9 @@ def create_store(display_name: str) -> str:
 
 
 def get_store_name() -> str:
-    """
-    Returns the store name from the environment.
-    Make sure FILE_SEARCH_STORE_NAME is set in your .env file.
-    """
     store_name = os.environ.get("FILE_SEARCH_STORE_NAME")
+    if not store_name:
+        raise ValueError("FILE_SEARCH_STORE_NAME is not set in your .env file.")
     return store_name
 
 
@@ -47,16 +49,9 @@ def get_store_name() -> str:
 # Ingestion
 # -------------------------------------------------------
 
-import time
-
 def ingest_document(file_path: str, metadata: dict = {}) -> None:
     """
     Upload and index a legal document (PDF, TXT, DOCX) into the File Search Store.
-
-    Args:
-        file_path: Local path to the file (e.g. '/tmp/jugement_2023.pdf')
-        metadata:  Optional key/value pairs for filtering later
-                   e.g. {"type": "jugement", "year": "2023", "province": "QC"}
     """
     store_name = get_store_name()
     path = Path(file_path)
@@ -66,12 +61,10 @@ def ingest_document(file_path: str, metadata: dict = {}) -> None:
 
     print(f"Ingesting {path.name} into store {store_name}...")
 
-    # Build custom metadata list from dict
     custom_metadata = [
         {"key": k, "string_value": str(v)} for k, v in metadata.items()
     ]
 
-    # Upload and index the file (returns a Long Running Operation)
     operation = client.file_search_stores.upload_to_file_search_store(
         file=str(path),
         file_search_store_name=store_name,
@@ -81,20 +74,20 @@ def ingest_document(file_path: str, metadata: dict = {}) -> None:
         }
     )
 
-    # Wait for indexing to complete before returning
-    while not operation.done:
-        print("Indexing in progress...")
-        time.sleep(5)
+    # Poll avec timeout
+    intervals = [2, 2, 2, 5, 5, 5, 10, 10, 10, 15]
+    for i, wait in enumerate(intervals):
         operation = client.operations.get(operation)
+        if operation.done:
+            print(f"Done: {path.name} indexed in ~{sum(intervals[:i])}s")
+            return
+        print(f"Indexing... ({wait}s)")
+        time.sleep(wait)
 
-    print(f"Done: {path.name} indexed successfully.")
+    print("Warning: indexing timed out — file may still be processing in the background.")
 
 
 def ingest_folder(folder_path: str, metadata: dict = {}) -> None:
-    """
-    Ingest all PDFs and text files in a folder.
-    Useful for the non-coder teammate to bulk-upload legal cases.
-    """
     folder = Path(folder_path)
     supported = {".pdf", ".txt", ".docx", ".md"}
     files = [f for f in folder.iterdir() if f.suffix.lower() in supported]
@@ -113,41 +106,65 @@ def ingest_folder(folder_path: str, metadata: dict = {}) -> None:
 
 
 # -------------------------------------------------------
-# Retrieval & Suggestions
+# Core RAG function (used by both /chat and /rag/suggest)
 # -------------------------------------------------------
 
-def get_resolution_suggestion(case_description: str) -> dict:
+def query_rag(user_message: str, history: list[types.Content] = []) -> dict:
+    """
+    Send a message to Gemini with File Search enabled on every call.
+    Supports multi-turn conversation via history.
+    Returns { "reply": str, "sources": list[str] }
+    """
     store_name = get_store_name()
 
-    prompt = f"""
-    You are a legal mediator for Quebec small claims court.
+    system_prompt = """
+    You are a legal mediator assistant for Quebec small claims and civil rights court.
 
     INSTRUCTIONS:
-    - Search the documents for similar past cases
-    - At the END of your response, add a section called "SOURCES:" 
+    - Always search the documents for similar past cases before answering
+    - Base your answer on the retrieved documents when possible
+    - At the END of your response, add a section called "SOURCES:"
     - In that section, list the exact display_name of every document you used
     - Format: SOURCES: [document1.txt, document2.txt]
     - If no document was found, write SOURCES: []
-
-    Dispute: {case_description}
+    - NEVER invent or hallucinate case references
+    - Only cite cases that exist in the provided documents
     """
 
-    response = client.models.generate_content(
-        model=MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            tools=[
-                types.Tool(
-                    file_search=types.FileSearch(
-                        file_search_store_names=[store_name]
-                    )
-                )
-            ]
-        )
-    )
+    # System prompt + conversation history + new user message
+    contents = [
+        types.Content(role="user", parts=[types.Part(text=system_prompt)]),
+        types.Content(role="model", parts=[types.Part(text="Compris. Je suis prêt à vous aider.")]),
+        *history,
+        types.Content(role="user", parts=[types.Part(text=user_message)])
+    ]
 
-    # Extraire les sources depuis le texte de la réponse
-    import re
+    # Retry automatique si rate limit
+    for attempt in range(3):
+        try:
+            response = client.models.generate_content(
+                model=MODEL,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    tools=[
+                        types.Tool(
+                            file_search=types.FileSearch(
+                                file_search_store_names=[store_name]
+                            )
+                        )
+                    ]
+                )
+            )
+            break
+        except Exception as e:
+            if "429" in str(e) and attempt < 2:
+                wait = (attempt + 1) * 30
+                print(f"Rate limit. Waiting {wait}s...")
+                time.sleep(wait)
+            else:
+                raise
+
+    # Extract sources from the response text
     text = response.text
     sources = []
 
@@ -156,85 +173,83 @@ def get_resolution_suggestion(case_description: str) -> dict:
         raw = match.group(1).strip()
         if raw:
             sources = [s.strip() for s in raw.split(",")]
-        # Nettoyer le texte pour ne pas afficher la ligne SOURCES
         text = text[:match.start()].strip()
 
-    return {
-        "suggestion": text,
-        "sources": sources
-    }
-
-def get_relevant_laws(case_description: str) -> str:
-    """
-    Retrieve relevant laws and articles applicable to the dispute.
-    """
-    store_name = get_store_name()
-
-    prompt = f"""
-    You are a legal mediator for Quebec small claims court.
-    STRICT RULES:
-    - ONLY cite cases that exist verbatim in the provided documents
-    - If no relevant case exists in the documents, say "Aucun cas similaire trouvé dans la base de données"
-    - NEVER invent or hallucinate case references
-    - Always mention the exact case number from the document
-
-    Dispute: {case_description}
-    """
-
-    response = client.models.generate_content(
-        model=MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            tools=[
-                types.Tool(
-                    file_search=types.FileSearch(
-                        file_search_store_names=[store_name]
-                    )
-                )
-            ]
-        )
-    )
-
-    return response.text
+    return {"reply": text, "sources": sources}
 
 
 # -------------------------------------------------------
-# FastAPI Routes (import this in your routes/rag.py)
+# Pydantic Models
 # -------------------------------------------------------
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+class Message(BaseModel):
+    role: str       # "user" or "model"
+    content: str
 
-router = APIRouter(prefix="/rag", tags=["RAG"])
+class ChatRequest(BaseModel):
+    message: str
+    history: list[Message] = []
 
+class ChatResponse(BaseModel):
+    reply: str
+    sources: list[str] = []
 
 class CaseQuery(BaseModel):
     case_description: str
 
+class IngestRequest(BaseModel):
+    file_path: str
+    metadata: dict = {}
 
-@router.post("/suggest")
+
+# -------------------------------------------------------
+# FastAPI Routes
+# -------------------------------------------------------
+
+def build_gemini_history(history: list[Message]) -> list[types.Content]:
+    return [
+        types.Content(
+            role=msg.role,
+            parts=[types.Part(text=msg.content)]
+        )
+        for msg in history
+    ]
+
+
+@router.post("/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest):
+    """
+    Main chat endpoint — every message triggers a RAG search.
+    Supports multi-turn conversation via history.
+    """
+    try:
+        gemini_history = build_gemini_history(request.history)
+        result = query_rag(request.message, gemini_history)
+        return ChatResponse(reply=result["reply"], sources=result["sources"])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/rag/suggest")
 def suggest_resolution(body: CaseQuery):
+    """
+    One-shot resolution suggestion based on past cases.
+    """
     try:
-        result = get_resolution_suggestion(body.case_description)
-        return result
+        result = query_rag(body.case_description)
+        return {"suggestion": result["reply"], "sources": result["sources"]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/laws")
-def relevant_laws(body: CaseQuery):
+@router.post("/rag/ingest")
+def ingest(body: IngestRequest):
+    """
+    Ingest a single document into the RAG store.
+    """
     try:
-        result = get_relevant_laws(body.case_description)
-        return {"laws": result}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/ingest")
-def ingest(file_path: str, metadata: dict = {}):
-    try:
-        ingest_document(file_path, metadata)
-        return {"status": "ok", "file": file_path}
+        ingest_document(body.file_path, body.metadata)
+        return {"status": "ok", "file": body.file_path}
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -242,13 +257,10 @@ def ingest(file_path: str, metadata: dict = {}):
 
 
 # -------------------------------------------------------
-# Run this ONCE to create your store, then delete it
+# Local test
 # -------------------------------------------------------
 
 if __name__ == "__main__":
-    result = get_resolution_suggestion(
-        "Quel est le montant exact de la pénalité dans le cas ZEBRA-9999?"
-    )
-    print(result["suggestion"])
-    print("Suggestion:", result["suggestion"])
+    result = query_rag("Quel est le montant exact de la pénalité dans le cas ZEBRA-9999?")
+    print("Reply:", result["reply"])
     print("Sources:", result["sources"])
